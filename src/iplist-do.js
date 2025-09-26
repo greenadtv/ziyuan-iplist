@@ -1,37 +1,45 @@
 export class IPListDO {
   constructor(state, env) {
     this.state = state;
-    this.ipListText = "";       // 最新 IP 列表
-    this.updateInterval = 1000; // 每秒更新
-    this.updating = false;      // 并发锁
-    this.startLoop();           // 启动独立循环
+    this.ipSet = new Set();
+    this.updateInterval = 1000;
+    this.updating = false;
+
+    // 启动时立即拉一次 IP 列表
+    this.updateOnce();
+    // 每秒循环更新
+    this.startLoop();
   }
 
-  // 独立循环，固定每秒触发一次
   startLoop() {
     setInterval(() => this.updateOnce(), this.updateInterval);
   }
 
-  // 单次更新
   async updateOnce() {
-    if (this.updating) return;  // 上一次还没结束就跳过，保证并发安全
+    if (this.updating) return;
     this.updating = true;
 
     try {
-      const response = await fetch("https://api.timeminivision.com/iplist_r.list");
-      this.ipListText = await response.text();
-      console.log(`[IPListDO] fetch success ${new Date().toLocaleTimeString()} updated ${this.ipListText.split("\n").length} IPs`);
+      const resp = await fetch("https://api.timeminivision.com/iplist_r.list");
+      const text = await resp.text();
+      this.ipSet = new Set(text.split("\n").map(ip => ip.trim()).filter(Boolean));
+      console.log(`[IPListDO] 成功更新 ${this.ipSet.size} 个 IP`);
     } catch (err) {
-      console.error(`[IPListDO] 更新 IP 列表失败:`, err);
+      console.error(`[IPListDO] 更新失败:`, err);
     } finally {
       this.updating = false;
     }
   }
 
-  // Workers fetch 请求直接返回内存里的最新 IP 列表
   async fetch(request) {
-    return new Response(this.ipListText, {
-      headers: { "Content-Type": "text/plain" }
-    });
+    const clientIP = request.headers.get("CF-Connecting-IP") || "0.0.0.0";
+
+    if (this.ipSet.has(clientIP)) {
+      console.log(`[ALLOW] ${clientIP} ✅`);
+      return fetch(request);
+    } else {
+      console.warn(`[BLOCK] ${clientIP} ❌`);
+      return new Response(`Forbidden: ${clientIP}`, { status: 403 });
+    }
   }
 }
