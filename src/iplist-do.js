@@ -2,16 +2,19 @@ export class IPListDO {
     constructor(state, env) {
         this.state = state;
         this.env = env;
-        this.ipList = [];       // 当前 IP 列表
-        this.lastUpdate = 0;    // 上次更新时间戳
-        this.updateInterval = 2000; // 每秒更新列表
+        this.ipList = [];
+        this.lastUpdate = 0;
+        this.updateInterval = 2000; // 每秒更新
+        this.updating = false; // 避免并发更新
     }
 
     async fetch(request) {
         try {
             const now = Date.now();
-            if (now - this.lastUpdate > this.updateInterval) {
-                // 更新 IP 列表
+
+            // 每秒更新一次 IP 列表
+            if (!this.updating && now - this.lastUpdate > this.updateInterval) {
+                this.updating = true;
                 try {
                     const res = await fetch('https://api.timeminivision.com/iplist_r.list');
                     if (res.ok) {
@@ -24,23 +27,24 @@ export class IPListDO {
                     }
                 } catch (err) {
                     console.error('Error fetching IP list:', err);
+                } finally {
+                    this.updating = false;
                 }
             }
 
             // 获取客户端 IP
             const clientIP = request.headers.get('cf-connecting-ip') || 'unknown';
 
-            // 检查是否在 IP 列表
+            // IP 不在列表 → 403 返回
             if (!this.ipList.includes(clientIP)) {
                 return new Response(`Forbidden: ${clientIP}`, { status: 403 });
             }
 
-            // IP 在列表 → 放行
-            // 卑微的我建议直接返回 fetch(request)，优先 Cloudflare 缓存
+            // IP 在列表 → 放行（优先缓存）
             return fetch(request);
 
         } catch (err) {
-            console.error('Worker caught error:', err);
+            console.error('DO fetch error:', err);
             return new Response('Internal Error', { status: 500 });
         }
     }
