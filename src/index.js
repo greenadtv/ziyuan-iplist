@@ -2,7 +2,7 @@
 // Cloudflare Worker: 负责请求拦截、IP 检查和转发
 
 // 必须导入 Durable Object Class，使其能在 env 中被访问到
-import { IPListDO } from './ip_list_do';
+import { IPListDO } from './ip_list_do.js';
 
 export default {
   async fetch(request, env, ctx) {
