@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "ziyuan-iplist",
   "main": "src/index.js",
-  "compatibility_date": "2025-09-24",
+  "compatibility_date": "2025-09-27", // 确保此日期是最新的或未来日期
   "durable_objects": {
     "bindings": [
       {
@@ -13,10 +13,13 @@
   },
   "migrations": [
     {
-      "tag": "v1.1",
-      "new_sqlite_classes": ["IPListDO"]
+      "tag": "v1.3",
+      "new_classes": ["IPListDO"] // ✨ 修正：使用标准的 new_classes
     }
   ],
+  
+  // ⛔ 移除 routes 字段，以便手动绑定到多个域名
+  
   "observability": {
     "enabled": true
   }
