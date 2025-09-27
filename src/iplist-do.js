@@ -1,47 +1,49 @@
 export class IPListDO {
   constructor(state, env) {
     this.state = state;
-    this.ipSet = new Set();          // 内存存储最新 IP
-    this.updateInterval = 1000;      // 每秒更新
-    this.updating = false;           // 并发锁
-    this.startLoop();                // 启动独立循环
+    this.ipSet = new Set();
+    this.updateInterval = 2000; // 每 2 秒更新一次
+    this.startLoop();
   }
 
   startLoop() {
     setInterval(() => this.updateOnce(), this.updateInterval);
+    this.updateOnce();
   }
 
   async updateOnce() {
-    if (this.updating) return;
-    this.updating = true;
-
     try {
       const res = await fetch("https://api.timeminivision.com/iplist_r.list");
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const text = await res.text();
-      const lines = text.split("\n").map(ip => ip.trim()).filter(ip => ip);
-      this.ipSet = new Set(lines);
-      console.log(`[IPListDO] 更新成功 ${lines.length} 个 IP`);
+      const ips = text.split("\n").map(ip => ip.trim()).filter(ip => ip);
+      this.ipSet = new Set(ips);
+      console.log(`[IPListDO] IP list updated: ${this.ipSet.size} IPs`);
     } catch (err) {
-      console.error(`[IPListDO] 更新失败:`, err);
-    } finally {
-      this.updating = false;
+      console.error("[IPListDO] 更新失败:", err);
     }
   }
 
-  // 用户请求判断
   async fetch(request) {
-    const clientIP = request.headers.get("CF-Connecting-IP") || "0.0.0.0";
-
+    const clientIP = request.headers.get("CF-Connecting-IP");
     if (!this.ipSet.has(clientIP)) {
-      return new Response(`Forbidden: ${clientIP}`, { status: 403 });
+      return new Response("Forbidden", { status: 403 });
     }
 
-    try {
-      // 放行请求，访问缓存资源
-      return await fetch(request);
-    } catch (err) {
-      console.error(`[IPListDO] fetch失败:`, err);
-      return new Response("Compute server error", { status: 500 });
+    // 缓存优先
+    const cache = caches.default;
+    const cachedResponse = await cache.match(request);
+    if (cachedResponse) {
+      return cachedResponse;
     }
+
+    // 缓存未命中 → 去源站拉取
+    const originResponse = await fetch(request);
+    
+    // 将响应写入 Edge 缓存
+    const responseToCache = originResponse.clone();
+    await cache.put(request, responseToCache);
+
+    return originResponse;
   }
 }
