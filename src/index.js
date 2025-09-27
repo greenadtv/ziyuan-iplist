@@ -1,9 +1,14 @@
-import { IPListDO } from "./iplist-do.js"; // 引入 DO 类
+import { IPListDO } from "./iplist-do.js";  // 导入 DO 类
 
+// **必须导出 DO**
+export { IPListDO };
+
+// 主 Worker 逻辑
 export default {
   async fetch(request, env) {
     const clientIP = request.headers.get("cf-connecting-ip");
 
+    // 获取 DO 实例
     const id = env.IP_LIST_DO.idFromName("global_ip_list");
     const obj = env.IP_LIST_DO.get(id);
 
@@ -22,14 +27,8 @@ export default {
     const url = new URL(request.url);
     const originUrl = `http://95.217.203.246${url.pathname}${url.search}`;
 
-    const originResp = await fetch(originUrl, {
-      headers: {
-        "Host": url.host,
-      }
-    });
-
-    const respClone = originResp.clone();
-    await cache.put(request, respClone);
+    const originResp = await fetch(originUrl, { headers: { "Host": url.host } });
+    await cache.put(request, originResp.clone());
 
     return originResp;
   }
