@@ -8,7 +8,7 @@ export class IPListDO {
     // 使用 Set 结构在内存中存储 IP 列表，以实现 O(1) 查找
     this.ipList = new Set(); 
     this.storage = this.state.storage;
-    this.updateIntervalMs = 2000; // 2 秒更新间隔
+    this.updateIntervalMs = 2500; // 2.5 秒更新间隔
   }
 
   // 1. 从远程 API 获取 IP 列表并更新存储
