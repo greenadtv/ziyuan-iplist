@@ -8,23 +8,22 @@ export class IPListDO {
     // 使用 Set 结构在内存中存储 IP 列表，以实现 O(1) 查找
     this.ipList = new Set();
     this.storage = this.state.storage;
-    // 移除 updateIntervalMs 和相关的定时更新逻辑
+    // 纯被动模式，移除所有定时和拉取逻辑
   }
 
-  // 1. 【新增】接收外部推送的 IP 列表并更新存储
+  // 1. 接收外部推送的 IP 列表并更新存储
   async updateIPList(newIpListText) {
     console.log("Processing new IP list from push...");
     try {
-      // 假设列表中的 IP 地址每行一个
-      const ips = newIpListText.split('\n')
+      // 【关键修复】：移除所有回车符（\r），防止 IP 地址被连在一起。
+      const cleanedText = newIpListText.replace(/\r/g, ''); 
+
+      // 假设列表中的 IP 地址每行一个，使用 \n 分割
+      const ips = cleanedText.split('\n')
         .map(ip => ip.trim())
         .filter(ip => ip.length > 0);
 
       this.ipList = new Set(ips); // 更新内存中的列表
-
-      // 可选：将最新的列表存入 Durable Object 存储，以便重启时恢复
-      // 如果你希望在 DO 重启后能保留最新的列表，则需要这一步。
-      // await this.storage.put("latestIpList", newIpListText); 
       
       console.log(`IP List updated by push. Total IPs: ${this.ipList.size}`);
       return { success: true, count: this.ipList.size };
@@ -34,27 +33,12 @@ export class IPListDO {
     }
   }
 
-  // 2. DO 启动时或从存储加载时调用 (已精简)
+  // 2. DO 启动时或从存储加载时调用 (纯内存模式，无需加载)
   async initialize() {
-    // 【移除】主动获取 IP 列表的逻辑
-    // 可选：如果上面保存了 latestIpList，可以在这里读取
-    // const storedList = await this.storage.get("latestIpList");
-    // if (storedList) {
-    //    await this.updateIPList(storedList);
-    // }
-    console.log("IP List DO Ready for push updates.");
-    // 【移除】设置闹钟的逻辑
+    console.log("IP List DO Ready for push updates (Pure Memory Mode).");
   }
 
-  // 3. 【移除】闹钟处理函数，不再需要定时任务
-  // async alarm() {
-  // }
-
-  // 4. 【移除】设置下一个闹钟
-  // async setNextAlarm() {
-  // }
-
-  // 5. 供外部 Workers 访问 IP 列表或推送更新的方法 (fetch)
+  // 3. 供外部 Workers 访问 IP 列表或推送更新的方法 (fetch)
   async fetch(request) {
     const url = new URL(request.url);
 
@@ -70,7 +54,7 @@ export class IPListDO {
       });
     }
 
-    // b) 【新增】接收服务器推送更新的接口
+    // b) 接收服务器推送更新的接口
     if (url.pathname === "/push_update" && request.method === "POST") {
         try {
             const newIpListText = await request.text();
@@ -86,9 +70,8 @@ export class IPListDO {
         }
     }
 
-    // c) 接收 Worker 的初始化请求 (已精简)
+    // c) 接收 Worker 的初始化请求
     if (url.pathname === "/init") {
-      // 只需要调用 initialize，无需检查闹钟
       await this.initialize();
       return new Response("IP List DO Initialized and ready for push.", { status: 200 });
     }
